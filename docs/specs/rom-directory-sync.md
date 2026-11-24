@@ -22,7 +22,7 @@ in issue #36:
 > optimized for that scenario and it's a bit hard to change.
 > — [arianrhodsandlot, 2025-11-21](https://github.com/arianrhodsandlot/retroassembly/issues/36)
 
-He promised "something like *mount mode*" and in March 2026 said it "might be
+He promised "something like _mount mode_" and in March 2026 said it "might be
 released before early May". As of **2026-11-24 it is still open and unimplemented** —
 13 months after the request, 6 months after the estimate. Upstream `main` (`fb062eff`,
 2026-11-10) contains no shared/scan/mount code at all.
@@ -55,13 +55,13 @@ that grows — still has to go through the browser, one file at a time.
 
 ## 2. Goals
 
-| # | Goal |
-|---|------|
-| **G1** | Point the instance at a host directory of ROMs and have them appear in the library, with their original filenames and looked-up metadata. |
-| **G2** | The directory stays authoritative. A re-sync picks up additions and content changes. |
-| **G3** | The app **never** mutates or deletes anything in the source directory. |
+| #      | Goal                                                                                                                                               |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **G1** | Point the instance at a host directory of ROMs and have them appear in the library, with their original filenames and looked-up metadata.          |
+| **G2** | The directory stays authoritative. A re-sync picks up additions and content changes.                                                               |
+| **G3** | The app **never** mutates or deletes anything in the source directory.                                                                             |
 | **G4** | Support exactly the platforms RetroAssembly already supports (`platformMap`, **32 platforms**), detected from directory names and file extensions. |
-| **G5** | Zero regression risk to the existing upload path, the multi-user model, favorites, save states, or launch history. |
+| **G5** | Zero regression risk to the existing upload path, the multi-user model, favorites, save states, or launch history.                                 |
 
 ### Non-goals
 
@@ -90,7 +90,7 @@ services:
     image: klampatech/retroassembly:local
     volumes:
       - /home/kyle/retroassembly/data:/app/data
-      - /srv/media/games:/roms:ro     # source collection, read-only
+      - /srv/media/games:/roms:ro # source collection, read-only
 ```
 
 ### 3.2 Layout detection
@@ -117,14 +117,14 @@ include `.gba`, `.a26`, `.lnx`, `.chd`, `.pce`, `.fds`, `.n64` and `.32x`.
 
 Four pairs of platforms are **duplicate entries for the same hardware** —
 
-| Platform key | Its twin | Shared extensions |
-|---|---|---|
-| `snes` | `sfc` | `.smc`, `.sfc`, `.zip` |
-| `nes` | `famicom` | `.nes`, `.unif`, `.unf`, `.zip` |
-| `genesis` | `megadrive` | `.md`, `.gen`, `.zip` |
-| `gb` | `gbc` | `.gb`, `.zip` |
+| Platform key | Its twin    | Shared extensions               |
+| ------------ | ----------- | ------------------------------- |
+| `snes`       | `sfc`       | `.smc`, `.sfc`, `.zip`          |
+| `nes`        | `famicom`   | `.nes`, `.unif`, `.unf`, `.zip` |
+| `genesis`    | `megadrive` | `.md`, `.gen`, `.zip`           |
+| `gb`         | `gbc`       | `.gb`, `.zip`                   |
 
-— so those extensions are ambiguous *by platform key* even though the hardware
+— so those extensions are ambiguous _by platform key_ even though the hardware
 is not. The alias table (§4.2) resolves each pair to one canonical key, and
 the UI lets you pin a platform for a root to resolve the rest.
 
@@ -135,7 +135,7 @@ Nintendo Entertainment System` all resolve to `snes`.
 
 ### 3.3 The sync
 
-1. **Preview** (`dryRun`) — scan and report what *would* happen, without
+1. **Preview** (`dryRun`) — scan and report what _would_ happen, without
    writing. Shows counts: new, changed, unchanged, pruned, skipped, errors.
 2. **Apply** — performs the import.
 3. **Resync** — re-run against the same root. Idempotent: unchanged files are
@@ -148,10 +148,10 @@ single blocking HTTP request.
 
 ### 3.4 Two storage modes
 
-| Mode | What happens | Disk cost | Source dir |
-|------|--------------|-----------|------------|
-| **`link`** (v1 default) | The file is materialized into RetroAssembly's own storage (`roms/<platform>/<digest><ext>`) via **hardlink → copy → symlink** fallback. The app owns the bytes afterwards. | ~0 with hardlink (same filesystem) | Read-only is fine |
-| **`reference`** (v2) | The app stores a pointer and streams the bytes straight from the source directory. Nothing is copied. | 0 | **Must** be readable; never written |
+| Mode                    | What happens                                                                                                                                                               | Disk cost                          | Source dir                          |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ----------------------------------- |
+| **`link`** (v1 default) | The file is materialized into RetroAssembly's own storage (`roms/<platform>/<digest><ext>`) via **hardlink → copy → symlink** fallback. The app owns the bytes afterwards. | ~0 with hardlink (same filesystem) | Read-only is fine                   |
+| **`reference`** (v2)    | The app stores a pointer and streams the bytes straight from the source directory. Nothing is copied.                                                                      | 0                                  | **Must** be readable; never written |
 
 Both modes satisfy G3. In `link` mode the source file is only ever read; the
 app's hardlink is deleted independently (removing a link does not touch the
@@ -234,9 +234,7 @@ path has a path on disk. Rather than duplicating the logic, `createRom` is
 refactored to accept a discriminated source:
 
 ```ts
-type RomSource =
-  | { kind: 'file'; file: File }
-  | { kind: 'path'; path: string; size: number; name: string }
+type RomSource = { kind: 'file'; file: File } | { kind: 'path'; path: string; size: number; name: string }
 ```
 
 and `storage.put()` gains a path variant that **streams** from disk
@@ -287,12 +285,12 @@ re-import idempotent.
 
 ### 4.6 Resync semantics
 
-| Source state | Action |
-|---|---|
-| File present, digest unchanged | No-op. `lastSeenAt` bumped. |
-| File present, digest changed | Re-materialize (new blob at the new digest's `fileId`), update the row's `fileId` in place. The `roms.id` is preserved so favorites, states and launch history survive. The superseded blob is deleted if nothing else references it. |
-| File present, not in manifest | New import. |
-| File absent, manifest entry present | If `prune = 1`: soft-delete the ROM row and remove the app's copy/link. If `prune = 0`: leave the library entry alone and report it as "orphaned". **The source directory is never touched either way.** |
+| Source state                        | Action                                                                                                                                                                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File present, digest unchanged      | No-op. `lastSeenAt` bumped.                                                                                                                                                                                                           |
+| File present, digest changed        | Re-materialize (new blob at the new digest's `fileId`), update the row's `fileId` in place. The `roms.id` is preserved so favorites, states and launch history survive. The superseded blob is deleted if nothing else references it. |
+| File present, not in manifest       | New import.                                                                                                                                                                                                                           |
+| File absent, manifest entry present | If `prune = 1`: soft-delete the ROM row and remove the app's copy/link. If `prune = 0`: leave the library entry alone and report it as "orphaned". **The source directory is never touched either way.**                              |
 
 ### 4.7 API
 
@@ -330,20 +328,21 @@ missing BIOS, …).
 
 ## 5. Security model
 
-| Threat | Mitigation |
-|---|---|
-| Path traversal via client-supplied path | Client supplies a **root id** only. Paths are resolved server-side from the configured allowlist. |
-| Symlink escape from the source dir | Every resolved path is `realpath`'d and must remain under the root's `realpath`. Symlinks pointing outside are skipped. |
-| Write into the source dir | The app never opens a source file for writing. In `reference` mode `storage.delete()` and `storage.put()` are hard no-ops for external ids. `link` mode only creates new entries under the app's own storage directory. |
-| Resource exhaustion from a huge directory | Configurable max file count and max depth per root; the scan is streaming, never accumulates the whole tree. |
-| Memory exhaustion from a large ROM | Streaming from disk end-to-end; never buffer a ROM. |
-| md5/CPU burn on huge files | md5 only for files ≤ 64 MiB; the partial digest reads 2 KiB per file. |
-| A sync wiping the library | Pruning is off by default and is an explicit, separately-confirmed action. |
-| Arbitrary file read via a crafted `fileId` | `reference`-mode ids are resolved through the same realpath containment check; `fileId` values are never taken from the client for content reads (the server looks the id up by `roms.id`). |
+| Threat                                     | Mitigation                                                                                                                                                                                                              |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Path traversal via client-supplied path    | Client supplies a **root id** only. Paths are resolved server-side from the configured allowlist.                                                                                                                       |
+| Symlink escape from the source dir         | Every resolved path is `realpath`'d and must remain under the root's `realpath`. Symlinks pointing outside are skipped.                                                                                                 |
+| Write into the source dir                  | The app never opens a source file for writing. In `reference` mode `storage.delete()` and `storage.put()` are hard no-ops for external ids. `link` mode only creates new entries under the app's own storage directory. |
+| Resource exhaustion from a huge directory  | Configurable max file count and max depth per root; the scan is streaming, never accumulates the whole tree.                                                                                                            |
+| Memory exhaustion from a large ROM         | Streaming from disk end-to-end; never buffer a ROM.                                                                                                                                                                     |
+| md5/CPU burn on huge files                 | md5 only for files ≤ 64 MiB; the partial digest reads 2 KiB per file.                                                                                                                                                   |
+| A sync wiping the library                  | Pruning is off by default and is an explicit, separately-confirmed action.                                                                                                                                              |
+| Arbitrary file read via a crafted `fileId` | `reference`-mode ids are resolved through the same realpath containment check; `fileId` values are never taken from the client for content reads (the server looks the id up by `roms.id`).                             |
 
 ## 6. Verification plan
 
 **Unit**
+
 - `detect-platform`: every alias resolves; ambiguous extensions are rejected;
   ambiguous folder names do not match.
 - `getFilePartialDigestFromPath` produces **the same digest** as
@@ -355,6 +354,7 @@ missing BIOS, …).
 - Manifest diffing: new / changed / unchanged / removed classification.
 
 **Integration**
+
 - Import a fixture tree → assert row count, `fileId` layout, metadata fields,
   and that the blobs exist in storage.
 - Re-import → assert zero changes (idempotent).
@@ -364,23 +364,25 @@ missing BIOS, …).
   operation.
 
 **End-to-end (Playwright)**
+
 - The Sync dialog renders configured roots; preview shows counts; sync
   progresses; the library shows the imported games; a game launches.
 
 **Live on `watch`**
+
 - Import the real 1,288-file collection into a scratch instance and confirm
   1,285 games, correct titles, and no source mutation.
 
 ## 7. Risks
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| `msleuth` rate-limits or falls over during a bulk import | Medium | Batch 100, cap concurrency at 4, exponential backoff, per-batch error capture that does not abort the run. The metadata migration path at `src/utils/server/migration/raw-metadata.ts` already demonstrates this pattern working on 1,279 ROMs. |
-| Import silently produces an empty library because the platform was mis-detected | Medium | Preview is mandatory before apply; the report lists every skipped file with a reason. |
-| `link` mode with `copy` strategy doubles the collection's disk usage | Medium | Hardlink is the default and the strategy is reported per root; the preview shows the estimated bytes to be materialized. |
-| A long import outlives the HTTP connection | Low | Background job with a polled status endpoint. |
-| `reference` mode's `fileId` scheme collides with a real storage path | Low | Reserved prefix (`external/`) that the storage layer checks before resolving anything else. |
-| Upstream merges a competing "mount mode" implementation | Low | The fork keeps the feature behind `RETROASSEMBLY_RUN_TIME_ROM_SYNC_ENABLED` and the data model is independent of upstream's. |
+| Risk                                                                            | Severity | Mitigation                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `msleuth` rate-limits or falls over during a bulk import                        | Medium   | Batch 100, cap concurrency at 4, exponential backoff, per-batch error capture that does not abort the run. The metadata migration path at `src/utils/server/migration/raw-metadata.ts` already demonstrates this pattern working on 1,279 ROMs. |
+| Import silently produces an empty library because the platform was mis-detected | Medium   | Preview is mandatory before apply; the report lists every skipped file with a reason.                                                                                                                                                           |
+| `link` mode with `copy` strategy doubles the collection's disk usage            | Medium   | Hardlink is the default and the strategy is reported per root; the preview shows the estimated bytes to be materialized.                                                                                                                        |
+| A long import outlives the HTTP connection                                      | Low      | Background job with a polled status endpoint.                                                                                                                                                                                                   |
+| `reference` mode's `fileId` scheme collides with a real storage path            | Low      | Reserved prefix (`external/`) that the storage layer checks before resolving anything else.                                                                                                                                                     |
+| Upstream merges a competing "mount mode" implementation                         | Low      | The fork keeps the feature behind `RETROASSEMBLY_RUN_TIME_ROM_SYNC_ENABLED` and the data model is independent of upstream's.                                                                                                                    |
 
 ## 8. Our install, as of 2026-11-24
 
@@ -414,10 +416,10 @@ Backups: `/home/kyle/retroassembly-backups/` on `watch`
    `.zip` is accepted by **31 of the 32** platforms, so a flat directory of
    zips cannot be auto-detected. Options: require platform subfolders
    (recommended), or let the operator pin a platform per root.
-3. **Multi-user sharing.** Should a source directory be visible to *all* users
+3. **Multi-user sharing.** Should a source directory be visible to _all_ users
    of the instance (requires the sentinel-ownership work of Phase 3), or only to
    the account that runs the sync? v1 is per-user.
-4. **BIOS files.** Platform BIOSes are stored in *user preferences*
+4. **BIOS files.** Platform BIOSes are stored in _user preferences_
    (`preference.emulator.platform[p].bioses`) and uploaded through a separate
    route. Should a source directory also supply BIOSes (matched by the `md5`
    values already listed in `platformMap[p].bioses`), or is BIOS handling out
