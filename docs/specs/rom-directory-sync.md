@@ -24,8 +24,30 @@ in issue #36:
 
 He promised "something like _mount mode_" and in March 2026 said it "might be
 released before early May". As of **2026-11-24 it is still open and unimplemented** —
-13 months after the request, 6 months after the estimate. Upstream `main` (`fb062eff`,
-2026-11-10) contains no shared/scan/mount code at all.
+13 months after the request, 6 months after the estimate.
+
+The upstream tree is **completely greenfield** for this. Verified against
+`upstream/main` (`fb062eff`):
+
+```bash
+git grep -inE 'readdir|readDir|opendir|glob\(' upstream/main -- src scripts
+# → no matches
+```
+
+There is no `readdir`, no `opendir`, no glob helper anywhere in `src/` or
+`scripts/`. Upstream never touches the filesystem to enumerate files — it only
+ever writes the single file it was handed. The API app
+(`src/api/app.ts`) mounts just `auth`, `users` and `library/*` (`favorites`,
+`files`, `launch_records`, `preference`, `roms`, `states`); there is no
+platform-list endpoint and no import endpoint. The author has **22 public
+repos** and none of them is a CLI, a rom-scanner, or a bulk-import tool
+(`package.json` has no `bin` field).
+
+The one adjacent project that _does_ matter is
+[**msleuth**](https://github.com/arianrhodsandlot/msleuth) — the metadata
+service that matches ROM files against the LaunchBox and Libretro databases by
+filename and MD5. Any importer should reuse it rather than inventing its own
+matching.
 
 There is one prior-art implementation: **PR #63** by `howeasy` ("feat: runtime
 subpath hosting + host-mounted shared ROM library", 1,342 additions across 56 files,
@@ -38,6 +60,32 @@ It is a good implementation and is worth reading, but it is not adoptable as-is:
   (10 call sites) — invasive, and every missed site is a silent data leak.
 - It is gated behind a "shared library" mode that also makes uploads read-only,
   conflating two different ideas.
+
+**It is still readable.** The author's fork branch survives at
+`https://github.com/howeasy/retroassembly/tree/feat/runtime-subpath-and-shared-rom-library`
+(`b1d838d6`, fetched locally as the `pr63` branch), and it is the most complete
+existing description of the problem. Worth reading before writing any of
+Phase 2–5.
+
+Two other closed upstream PRs land squarely in the areas this work touches:
+
+| PR                                                               | Title                                                                 | Relevance                                                                                                          |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| [#79](https://github.com/arianrhodsandlot/retroassembly/pull/79) | "fix: stream ROM uploads to disk instead of buffering them in memory" | The exact fix Phase 1 needs, already proposed upstream and closed unmerged.                                        |
+| [#83](https://github.com/arianrhodsandlot/retroassembly/pull/83) | "fix: keep stored file paths inside the storage directory"            | A path-containment fix in `createStorage()`. Phase 7's `external/` id scheme must not repeat the hole this closes. |
+
+Two upstream discussions cover adjacent ground and are worth a read:
+[#46](https://github.com/arianrhodsandlot/retroassembly/discussions/46) and
+[#59](https://github.com/arianrhodsandlot/retroassembly/discussions/59) on
+sharing a library between accounts (this is the per-user `libraryMode` feature
+already merged — _not_ a disk-directory feature), and
+[#65](https://github.com/arianrhodsandlot/retroassembly/discussions/65) on
+fully self-contained deployment.
+
+**One independent copy** of the project exists —
+[`daemonless/retroassembly`](https://github.com/daemonless/retroassembly), a
+non-fork mirror last pushed 2026-11-15. It contains no scan, shared, import or
+sync files either, so it is not prior art for this feature.
 
 ### 1.1 Our specific situation
 
@@ -55,13 +103,13 @@ that grows — still has to go through the browser, one file at a time.
 
 ## 2. Goals
 
-| #      | Goal                                                                                                                                               |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **G1** | Point the instance at a host directory of ROMs and have them appear in the library, with their original filenames and looked-up metadata.          |
-| **G2** | The directory stays authoritative. A re-sync picks up additions and content changes.                                                               |
-| **G3** | The app **never** mutates or deletes anything in the source directory.                                                                             |
-| **G4** | Support exactly the platforms RetroAssembly already supports (`platformMap`, **32 platforms**), detected from directory names and file extensions. |
-| **G5** | Zero regression risk to the existing upload path, the multi-user model, favorites, save states, or launch history.                                 |
+| #      | Goal                                                                                                                                                                                                                                                            |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **G1** | Point the instance at a host directory of ROMs and have them appear in the library, with their original filenames and looked-up metadata.                                                                                                                       |
+| **G2** | The directory stays authoritative. A re-sync picks up additions and content changes.                                                                                                                                                                            |
+| **G3** | The app **never** mutates or deletes anything in the source directory.                                                                                                                                                                                          |
+| **G4** | Support exactly the platforms RetroAssembly already supports — `platformMap`'s **32 platform keys**, covering the **28 consoles** the readme lists (the extra keys are aliases of the same hardware, §3.2) — detected from directory names and file extensions. |
+| **G5** | Zero regression risk to the existing upload path, the multi-user model, favorites, save states, or launch history.                                                                                                                                              |
 
 ### Non-goals
 
@@ -222,7 +270,13 @@ For each candidate file the pipeline computes:
   `msleuth` match key. Larger files are matched by name only (same policy PR
   #63 used). This avoids hashing a 700 MiB PSX CHD on every resync.
 - **metadata** — `msleuth.identify({ files: [{ md5, name }], platform })`, the
-  same call `createRom()` makes, batched 100 at a time.
+  same call `createRom()` makes, batched 100 at a time. The service is
+  [`arianrhodsandlot/msleuth`](https://github.com/arianrhodsandlot/msleuth),
+  reachable at `RETROASSEMBLY_RUN_TIME_MSLEUTH_HOST` with
+  `RETROASSEMBLY_RUN_TIME_MSLEUTH_FALLBACK_HOST` as a second endpoint; it
+  matches against the LaunchBox and Libretro databases and returns the
+  `launchbox` / `libretro` objects `createRom()` already knows how to map onto
+  the `roms` row.
 
 The result is a normal `roms` row: same columns, same `fileId` layout, same
 metadata fields.
@@ -389,10 +443,27 @@ missing BIOS, …).
 Restored during this work, before any code changes:
 
 - The official image was already at the newest published tag
-  (`v7.261011.1345`, built 2026-10-11) — but it ships **Node v26.5.0**, which
-  is affected by **CVE-2026-111497** (Brotli decoder RCE, fixed in Node
-  26.12.1). Upstream fixed this in PR #81 but **no new image was ever
-  published**. Our fork's image is built from `main` and ships **Node v26.12.1**.
+  (`v7.261011.1345`) — but it ships **Node v26.5.0**, which is affected by
+  **CVE-2026-111497** (Brotli decoder RCE, fixed in Node 26.12.1). Upstream
+  fixed this in PR #81 but **no new image was ever published**. Our fork's
+  image is built from `main` and ships **Node v26.12.1**.
+
+  > **The tag name is a trap.** Upstream's tag scheme is `v7.YYMMDD.HHMM`, so
+  > `v7.261011.1345` is **11 October 2026**, not 10 November. The tag's commit
+  > is dated `2026-10-11`; the Node 26.12.1 bump (PR #81) is dated
+  > `2026-11-09` and is **not an ancestor of the tag**:
+  >
+  > ```bash
+  > git merge-base --is-ancestor 43ff037a v7.261011.1345  # → non-zero, NOT in tag
+  > ```
+  >
+  > Docker Hub's `latest` is byte-identical to that tag (same sha256 digest,
+  > pushed 2026-10-11T13:48Z), so `latest` is _newer_ than the newest
+  > published **release notes** (`v7.260719.1051`, 2026-07-19) but still
+  > **older than the source**. The `latest` tag tracks the newest git tag, and
+  > the CI workflow only rebuilds on a tag push — so no image has ever
+  > carried the Node CVE fix.
+
 - The empty library was repaired by merging the stranded install's data
   (1,285 ROMs, 263 states, 130 launch records) into the live database under the
   account Kyle currently logs in with, and moving the 1.3 GB of blobs into the

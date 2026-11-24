@@ -9,6 +9,13 @@ Companion to [`docs/specs/rom-directory-sync.md`](../specs/rom-directory-sync.md
 > Branch discipline: every phase lands on its own branch → PR → **Kyle merges**.
 > Never push to `main`. The agent opens the PR and reports the URL.
 
+> **Read before Phase 2:** `https://github.com/howeasy/retroassembly/tree/feat/runtime-subpath-and-shared-rom-library`
+> (`b1d838d6`) is the closed-but-alive branch of upstream PR #63 — a complete
+> implementation of the shared-ROM-library idea. Fetch it (`git fetch origin
+> 'refs/pull/63/head:pr63'` from the upstream repo) and read it during Phase 2
+> and 3. This plan deliberately differs from it (see the spec's §1 for why),
+> but there is no reason to rediscover what it already solved.
+
 ---
 
 ## Ground rules
@@ -60,7 +67,14 @@ docker images ghcr.io/klampatech/retroassembly
 
 **Why:** the import path has a file on disk, not a web `File`. This phase makes
 the existing ingestion code path-agnostic **and** stops ROMs being buffered in
-memory (upstream issue #68).
+memory (upstream issue #68, "Memory not released after ROM upload").
+
+**Prior art:** upstream
+[PR #79](https://github.com/arianrhodsandlot/retroassembly/pull/79) — "fix:
+stream ROM uploads to disk instead of buffering them in memory" — is exactly
+this change, closed unmerged. Read it before writing 1.2/1.3; if the fork's
+approach is sound, port it rather than reinventing it, but keep it as its own
+commit so it can be dropped if upstream lands something equivalent.
 
 | #   | Task                                                                                                                                                                                                                                                                                 | File                                                               |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
@@ -178,6 +192,14 @@ running instance.
 **Why second:** `link` mode covers the common case. `reference` is needed when
 the source is on a read-only mount on a different filesystem, where hardlink is
 impossible and copying gigabytes is unacceptable.
+
+**Prior art:** upstream
+[PR #83](https://github.com/arianrhodsandlot/retroassembly/pull/83) — "fix:
+keep stored file paths inside the storage directory" — closed unmerged. It
+closes a path-containment hole in `createStorage()`. Phase 7 introduces a
+**second** way for a `fileId` to resolve outside the storage directory, so it
+must not reopen that hole: read #83 first, and make the containment check
+cover external ids too.
 
 | #   | Task                                                                                                                                                                                                              | File                                    |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
