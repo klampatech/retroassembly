@@ -81,10 +81,10 @@ must be behavior-preserving; the e2e `rom-management.spec.ts` is the guard.
 
 | # | Task | File |
 |---|------|------|
-| 2.1 | Add `platformAliases`: for each of the 33 platforms in `platformMap`, collect the platform key, `libretroName`, the localized display name, and a curated alias list (`snes` → `snes`, `sfc`, `super nes`, `super nintendo entertainment system`, `nintendo - super nintendo entertainment system`, `snES`…). Lowercased. | `src/constants/platform-aliases.ts` |
-| 2.2 | Build `extensionToPlatforms`: every extension in every `platformMap[p].fileExtensions` → the platforms that accept it. A single-platform mapping is unambiguous; `.zip` (20+ platforms) is not. | `src/constants/platform-aliases.ts` |
+| 2.1 | Add `platformAliases`: for each of the **32** platforms in `platformMap`, collect the platform key, `libretroName`, the localized display name, and a curated alias list (`snes` → `snes`, `sfc`, `super nes`, `super nintendo entertainment system`, `nintendo - super nintendo entertainment system`, …). Lowercased. Collapse the four duplicate pairs (`snes`/`sfc`, `nes`/`famicom`, `genesis`/`megadrive`, `gb`/`gbc`) to one canonical key each. | `src/constants/platform-aliases.ts` |
+| 2.2 | Build `extensionToPlatforms`: every extension in every `platformMap[p].fileExtensions` → the platforms that accept it. A single-platform mapping is unambiguous; `.zip` (31 of 32 platforms) is not. | `src/constants/platform-aliases.ts` |
 | 2.3 | `detectPlatform({ relativePath, rootPlatform })` → `PlatformName \| 'ambiguous' \| 'unsupported'`. Order: pinned root platform → matching path segment (alias) → unambiguous extension → ambiguous. | `src/utils/server/rom-source/detect-platform.ts` |
-| 2.4 | Unit: every alias resolves to its platform; `.smc` → snes/sfc (unambiguous only if exactly one); `.zip` → ambiguous; unknown extension → unsupported; a pinned root platform always wins. | `tests/unit/detect-platform.test.ts` |
+| 2.4 | Unit: every alias resolves to its platform; `.smc` → `snes` (after the `snes`/`sfc` pair is collapsed); `.gba` → `gba`; `.zip` → ambiguous; unknown extension → unsupported; a pinned root platform always wins. | `tests/unit/detect-platform.test.ts` |
 
 **Acceptance**
 - `detectPlatform('snes/Super Mario World (U).smc')` → `snes`.

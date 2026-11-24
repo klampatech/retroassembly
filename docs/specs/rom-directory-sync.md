@@ -60,7 +60,7 @@ that grows — still has to go through the browser, one file at a time.
 | **G1** | Point the instance at a host directory of ROMs and have them appear in the library, with their original filenames and looked-up metadata. |
 | **G2** | The directory stays authoritative. A re-sync picks up additions and content changes. |
 | **G3** | The app **never** mutates or deletes anything in the source directory. |
-| **G4** | Support exactly the platforms RetroAssembly already supports (`platformMap`, 33 platforms), detected from directory names and file extensions. |
+| **G4** | Support exactly the platforms RetroAssembly already supports (`platformMap`, **32 platforms**), detected from directory names and file extensions. |
 | **G5** | Zero regression risk to the existing upload path, the multi-user model, favorites, save states, or launch history. |
 
 ### Non-goals
@@ -109,10 +109,24 @@ Two layouts are supported, detected automatically:
 ```
 
 In layout B the platform is inferred from the extension, which is only possible
-when the extension is **unambiguous** (`.smc` → `snes`/`sfc`, `.nes` → `nes`/`famicom`).
-`.zip` is legal on 20+ platforms, so a flat `.zip` file is **ambiguous** and the
-sync reports it rather than guessing. The UI lets you pin a platform for a root
-to resolve the ambiguity.
+when the extension is **unambiguous**. The extension→platform map derived from
+`platformMap` is lopsided: **31 of the 32 platforms accept `.zip`** (only
+PlayStation is `.chd`-only), so a flat `.zip` file is **ambiguous** and the sync
+reports it rather than guessing. Extensions that map to exactly one platform
+include `.gba`, `.a26`, `.lnx`, `.chd`, `.pce`, `.fds`, `.n64` and `.32x`.
+
+Four pairs of platforms are **duplicate entries for the same hardware** —
+
+| Platform key | Its twin | Shared extensions |
+|---|---|---|
+| `snes` | `sfc` | `.smc`, `.sfc`, `.zip` |
+| `nes` | `famicom` | `.nes`, `.unif`, `.unf`, `.zip` |
+| `genesis` | `megadrive` | `.md`, `.gen`, `.zip` |
+| `gb` | `gbc` | `.gb`, `.zip` |
+
+— so those extensions are ambiguous *by platform key* even though the hardware
+is not. The alias table (§4.2) resolves each pair to one canonical key, and
+the UI lets you pin a platform for a root to resolve the rest.
 
 Folder names are matched case-insensitively against the platform key, the
 libretro name, the display name, and a curated alias list — so `SNES`,
@@ -178,8 +192,12 @@ which platforms exist and which extensions each accepts. Two new tables are
 derived from it at module load:
 
 - `extension → PlatformName[]` — every extension across all platforms, mapped
-  to the platforms that accept it. An extension mapping to exactly one platform
-  is unambiguous; `.zip` maps to 20+ and is therefore ambiguous.
+  to the platforms that accept it. 31 of 32 platforms accept `.zip`, so `.zip`
+  is ambiguous; `.gba`, `.a26`, `.lnx`, `.chd`, `.pce`, `.fds`, `.n64` and
+  `.32x` are unambiguous. The four duplicate platform pairs (`snes`/`sfc`,
+  `nes`/`famicom`, `genesis`/`megadrive`, `gb`/`gbc`) are collapsed to one
+  canonical key by the alias table, so their shared extensions are unambiguous
+  in practice.
 - `alias → PlatformName` — platform key, `libretroName`, display name, and a
   curated alias list, lowercased.
 
@@ -393,9 +411,9 @@ Backups: `/home/kyle/retroassembly-backups/` on `watch`
    this spec is **off** — append-only — because it is the non-destructive
    choice.
 2. **`.zip` ambiguity.** RetroAssembly's own collection is mostly `.zip`, and
-   `.zip` is legal on 20+ platforms, so a flat directory of zips cannot be
-   auto-detected. Options: require platform subfolders (recommended), or let
-   the operator pin a platform per root.
+   `.zip` is accepted by **31 of the 32** platforms, so a flat directory of
+   zips cannot be auto-detected. Options: require platform subfolders
+   (recommended), or let the operator pin a platform per root.
 3. **Multi-user sharing.** Should a source directory be visible to *all* users
    of the instance (requires the sentinel-ownership work of Phase 3), or only to
    the account that runs the sync? v1 is per-user.
